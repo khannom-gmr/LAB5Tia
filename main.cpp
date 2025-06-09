@@ -269,10 +269,10 @@ public:
 };
 
 // Leer CSV de MNIST
-bool leer_csv_mnist(const string& mnist_train.csv, vector<vector<double>>& imagenes, vector<int>& etiquetas) {
-    ifstream archivo(mnist_train.csv);
+bool leer_csv_mnist(const string& mnist_train, vector<vector<double>>& imagenes, vector<int>& etiquetas) {
+    ifstream archivo("mnist_train.csv");
     if (!archivo.is_open()) {
-        cout << "Error: No se pudo abrir el archivo " << mnist_train.csv << endl;
+        cout << "Error: No se pudo abrir el archivo " << mnist_train << endl;
         return false;
     }
 
@@ -280,7 +280,7 @@ bool leer_csv_mnist(const string& mnist_train.csv, vector<vector<double>>& image
     bool primera_linea = true;
     int contador = 0;
 
-    cout << "Leyendo archivo: " << mnist_train.csv << "...\n";
+    cout << "Leyendo archivo: " << mnist_train << "...\n";
 
     while (getline(archivo, linea)) {
         // Saltar la primera línea si contiene headers
