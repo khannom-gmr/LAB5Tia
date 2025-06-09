@@ -357,7 +357,7 @@ void evaluar_modelo(RedNeuronalMNIST& red, const vector<vector<double>>& imagene
     }
 
     double precision = (double)predicciones_correctas / total_muestras * 100.0;
-    cout << "\n📊 RESULTADOS DE EVALUACIÓN:\n";
+    cout << "\n RESULTADOS DE EVALUACIÓN:\n";
     cout << "   Muestras evaluadas: " << total_muestras << "\n";
     cout << "   Predicciones correctas: " << predicciones_correctas << "\n";
     cout << "   Precisión: " << precision << "%\n";
@@ -414,7 +414,7 @@ int main() {
         generar_datos_prueba(imagenes_entrenamiento, etiquetas_entrenamiento);
     } else {
         // Usar solo una muestra para entrenamiento rápido
-        int muestras_entrenamiento = min(5000, (int)imagenes_entrenamiento.size());
+        int muestras_entrenamiento = min(10000, (int)imagenes_entrenamiento.size());
         imagenes_entrenamiento.resize(muestras_entrenamiento);
         etiquetas_entrenamiento.resize(muestras_entrenamiento);
 
@@ -424,31 +424,31 @@ int main() {
     // Entrenar la red
     red.entrenar(imagenes_entrenamiento, etiquetas_entrenamiento, csv_cargado ? 50 : 100);
 
-    // Intentar leer datos de prueba
-    vector<vector<double>> imagenes_prueba;
-    vector<int> etiquetas_prueba;
+    // leer datos de prueba
+    vector<vector<double>> imagenes_test;
+    vector<int> etiquetas_test;
 
     cout << "\n CARGANDO DATOS DE PRUEBA\n";
-    bool test_csv_cargado = leer_csv_mnist("mnist_test.csv", imagenes_prueba, etiquetas_prueba);
+    bool test_csv_cargado = leer_csv_mnist("mnist_test.csv", imagenes_test, etiquetas_test);
 
     if (test_csv_cargado) {
-        evaluar_modelo(red, imagenes_prueba, etiquetas_prueba);
+        evaluar_modelo(red, imagenes_test, etiquetas_test);
     } else {
         cout << "️  No se encontró mnist_test.csv, usando datos de entrenamiento para demostración...\n";
-        imagenes_prueba = imagenes_entrenamiento;
-        etiquetas_prueba = etiquetas_entrenamiento;
+        imagenes_test = imagenes_entrenamiento;
+        etiquetas_test = etiquetas_entrenamiento;
     }
 
     //  DEMOSTRACIÓN
     cout << "\n MUESTRAS DE DEMOSTRACIÓN \n";
     cout << "================================\n";
 
-    for (int prueba = 0; prueba < 5 && prueba < imagenes_prueba.size(); ++prueba) {
-        int prediccion = red.predecir_digito(imagenes_prueba[prueba]);
-        vector<double> todas_probabilidades = red.obtener_probabilidades(imagenes_prueba[prueba]);
+    for (int prueba = 0; prueba < 50 && prueba < imagenes_test.size(); ++prueba) {
+        int prediccion = red.predecir_digito(imagenes_test[prueba]);
+        vector<double> todas_probabilidades = red.obtener_probabilidades(imagenes_test[prueba]);
 
         cout << "\n Muestra " << prueba + 1 << ":\n";
-        cout << "   correcto digito: " << etiquetas_prueba[prueba] << "\n";
+        cout << "   correcto digito: " << etiquetas_test[prueba] << "\n";
         cout << "   predicción: " << prediccion << "\n";
         cout << "   confianza: " << (int)(todas_probabilidades[prediccion] * 100) << "%\n";
         cout << "   Probabilidades por dígito:\n      ";
@@ -459,7 +459,7 @@ int main() {
         cout << "\n";
 
         // Indicar si la predicción fue correcta
-        if (prediccion == etiquetas_prueba[prueba]) {
+        if (prediccion == etiquetas_test[prueba]) {
             cout << "    Predicción CORRECTA!\n";
         } else {
             cout << "    Predicción incorrecta\n";

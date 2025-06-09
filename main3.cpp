@@ -12,12 +12,12 @@ using namespace std;
 
 //  FUNCIONES DE ACTIVACIÓN
 
-// Función Sigmoide
+// Función Sigmoid
 double sigmoide(double valor) {
     return 1.0 / (1.0 + exp(-valor));
 }
 
-// Derivada de la sigmoide para retropropagación
+// Derivada retropropagación
 double derivada_sigmoide(double valor) {
     double sig = sigmoide(valor);
     return sig * (1 - sig);
@@ -64,12 +64,15 @@ double producto_punto(const vector<double>& pesos, const vector<double>& entrada
     return resultado;
 }
 
-//  RED NEURONAL MNIST CON RMSPROP
+//  RED NEURONAL MNIST CON OPTIMIZADOR ADAM
 class RedNeuronalMNIST {
 private:
     double velocidad_aprendizaje;
-    double beta;        // Factor de decaimiento para RMSprop (típicamente 0.9)
+    double beta1;       // Factor de decaimiento para el momento (típicamente 0.9)
+    double beta2;       // Factor de decaimiento para RMSprop (típicamente 0.999)
     double epsilon;     // Pequeño valor para evitar división por cero
+    int iteracion;      // Contador de iteraciones para corrección de sesgo
+
     int num_pixeles;        // 784 píxeles
     int num_neuronas_ocultas;   // 128 neuronas
     int num_digitos;        // 10 dígitos
@@ -78,23 +81,30 @@ private:
     vector<vector<double>> pesos_entrada_a_oculta;  // De píxeles a capa oculta
     vector<vector<double>> pesos_oculta_a_salida;   // De capa oculta a dígitos
 
-    // Matrices para RMSprop - almacenan promedio móvil de gradientes al cuadrado
-    vector<vector<double>> rmsprop_entrada_oculta;
-    vector<vector<double>> rmsprop_oculta_salida;
+    // Matrices para Adam - Momento (primera momento)
+    vector<vector<double>> momento_entrada_oculta;
+    vector<vector<double>> momento_oculta_salida;
+
+    // Matrices para Adam - Velocidad (segundo momento)
+    vector<vector<double>> velocidad_entrada_oculta;
+    vector<vector<double>> velocidad_oculta_salida;
 
 public:
-    // Constructor: inicializa la red con RMSprop
-    RedNeuronalMNIST(int pixeles = 784, int ocultas = 128, int digitos = 10, double velocidad = 0.001, double beta_rmsprop = 0.9)
+    // Constructor: inicializa la red con Adam
+    RedNeuronalMNIST(int pixeles = 784, int ocultas = 128, int digitos = 10,
+                     double velocidad = 0.001, double beta1_adam = 0.9, double beta2_adam = 0.999)
         : num_pixeles(pixeles), num_neuronas_ocultas(ocultas), num_digitos(digitos),
-          velocidad_aprendizaje(velocidad), beta(beta_rmsprop), epsilon(1e-8) {
+          velocidad_aprendizaje(velocidad), beta1(beta1_adam), beta2(beta2_adam),
+          epsilon(1e-8), iteracion(0) {
 
         srand(time(0));
-        cout << "\n Inicializando Red Neuronal con RMSprop...\n";
+        cout << "\n🧠 Inicializando Red Neuronal con Optimizador Adam...\n";
         cout << "    Píxeles de entrada: " << pixeles << "\n";
         cout << "    Neuronas ocultas: " << ocultas << "\n";
         cout << "    Dígitos de salida: " << digitos << "\n";
         cout << "    Velocidad de aprendizaje: " << velocidad << "\n";
-        cout << "    Beta RMSprop: " << beta << "\n";
+        cout << "    Beta1 (momento): " << beta1 << "\n";
+        cout << "    Beta2 (velocidad): " << beta2 << "\n";
 
         // Inicializar pesos con valores pequeños aleatorios (Xavier initialization)
         double limite_entrada = sqrt(6.0 / (pixeles + ocultas));
@@ -102,7 +112,8 @@ public:
 
         // Inicializar matriz de pesos entrada a oculta
         pesos_entrada_a_oculta = vector<vector<double>>(ocultas, vector<double>(pixeles + 1));
-        rmsprop_entrada_oculta = vector<vector<double>>(ocultas, vector<double>(pixeles + 1, 0.0));
+        momento_entrada_oculta = vector<vector<double>>(ocultas, vector<double>(pixeles + 1, 0.0));
+        velocidad_entrada_oculta = vector<vector<double>>(ocultas, vector<double>(pixeles + 1, 0.0));
 
         for (int neurona = 0; neurona < ocultas; ++neurona) {
             for (int conexion = 0; conexion < pixeles + 1; ++conexion) {
@@ -113,7 +124,8 @@ public:
 
         // Inicializar matriz de pesos oculta a salida
         pesos_oculta_a_salida = vector<vector<double>>(digitos, vector<double>(ocultas + 1));
-        rmsprop_oculta_salida = vector<vector<double>>(digitos, vector<double>(ocultas + 1, 0.0));
+        momento_oculta_salida = vector<vector<double>>(digitos, vector<double>(ocultas + 1, 0.0));
+        velocidad_oculta_salida = vector<vector<double>>(digitos, vector<double>(ocultas + 1, 0.0));
 
         for (int digito = 0; digito < digitos; ++digito) {
             for (int conexion = 0; conexion < ocultas + 1; ++conexion) {
@@ -139,25 +151,40 @@ public:
         return pixeles_normalizados;
     }
 
-    // Actualización de pesos usando RMSprop
-    void actualizar_pesos_rmsprop(vector<vector<double>>& pesos,
-                                  vector<vector<double>>& rmsprop_cache,
-                                  const vector<vector<double>>& gradientes) {
+    // Actualización de pesos usando Adam
+    void actualizar_pesos_adam(vector<vector<double>>& pesos,
+                               vector<vector<double>>& momento,
+                               vector<vector<double>>& velocidad,
+                               const vector<vector<double>>& gradientes) {
+
+        // Incrementar contador de iteraciones
+        iteracion++;
+
+        // Calcular factores de corrección de sesgo
+        double correccion_momento = 1.0 - pow(beta1, iteracion);
+        double correccion_velocidad = 1.0 - pow(beta2, iteracion);
+
         for (size_t i = 0; i < pesos.size(); ++i) {
             for (size_t j = 0; j < pesos[i].size(); ++j) {
-                // Actualizar promedio móvil de gradientes al cuadrado
-                rmsprop_cache[i][j] = beta * rmsprop_cache[i][j] + (1.0 - beta) * gradientes[i][j] * gradientes[i][j];
+                // Actualizar momento (promedio móvil de gradientes)
+                momento[i][j] = beta1 * momento[i][j] + (1.0 - beta1) * gradientes[i][j];
 
-                // Actualizar pesos con velocidad de aprendizaje adaptativa
-                double velocidad_adaptativa = velocidad_aprendizaje / (sqrt(rmsprop_cache[i][j]) + epsilon);
-                pesos[i][j] -= velocidad_adaptativa * gradientes[i][j];
+                // Actualizar velocidad (promedio móvil de gradientes al cuadrado)
+                velocidad[i][j] = beta2 * velocidad[i][j] + (1.0 - beta2) * gradientes[i][j] * gradientes[i][j];
+
+                // Corregir sesgo
+                double momento_corregido = momento[i][j] / correccion_momento;
+                double velocidad_corregida = velocidad[i][j] / correccion_velocidad;
+
+                // Actualizar pesos
+                pesos[i][j] -= velocidad_aprendizaje * momento_corregido / (sqrt(velocidad_corregida) + epsilon);
             }
         }
     }
 
-    // ENTRENAMIENTO CON RMSPROP
+    // ENTRENAMIENTO CON ADAM
     void entrenar(const vector<vector<double>>& imagenes, const vector<int>& digitos_correctos, int num_epocas) {
-        cout << "\n Iniciando entrenamiento con RMSprop - " << imagenes.size() << " imágenes...\n";
+        cout << "\n Iniciando entrenamiento con Adam - " << imagenes.size() << " imágenes...\n";
         cout << "================================================================\n";
 
         for (int epoca = 0; epoca < num_epocas; ++epoca) {
@@ -252,20 +279,21 @@ public:
                 }
             }
 
-            // Actualizar pesos usando RMSprop
-            actualizar_pesos_rmsprop(pesos_oculta_a_salida, rmsprop_oculta_salida, gradientes_oculta_salida);
-            actualizar_pesos_rmsprop(pesos_entrada_a_oculta, rmsprop_entrada_oculta, gradientes_entrada_oculta);
+            // Actualizar pesos usando Adam
+            actualizar_pesos_adam(pesos_oculta_a_salida, momento_oculta_salida, velocidad_oculta_salida, gradientes_oculta_salida);
+            actualizar_pesos_adam(pesos_entrada_a_oculta, momento_entrada_oculta, velocidad_entrada_oculta, gradientes_entrada_oculta);
 
             // Mostrar progreso cada 10 épocas
             if ((epoca + 1) % 10 == 0) {
                 double precision = (double)predicciones_correctas / imagenes.size() * 100.0;
                 cout << "📊 Época " << epoca + 1 << "/" << num_epocas
                      << " | Error: " << (error_total/imagenes.size())
-                     << " | Precisión: " << precision << "%\n";
+                     << " | Precisión: " << precision << "%"
+                     << " | Iteración Adam: " << iteracion << "\n";
             }
         }
         cout << "================================================================\n";
-        cout << " Entrenamiento con RMSprop completado!\n";
+        cout << " Entrenamiento con Adam completado!\n";
     }
 
     // PREDICCIÓN
@@ -312,6 +340,14 @@ public:
         }
 
         return softmax(valores_salida);
+    }
+
+    // Método para obtener estadísticas de Adam
+    void mostrar_estadisticas_adam() {
+        cout << "\n📈 ESTADÍSTICAS DEL OPTIMIZADOR ADAM:\n";
+        cout << "    Iteraciones completadas: " << iteracion << "\n";
+        cout << "    Factor de corrección momento: " << (1.0 - pow(beta1, iteracion)) << "\n";
+        cout << "    Factor de corrección velocidad: " << (1.0 - pow(beta2, iteracion)) << "\n";
     }
 };
 
@@ -391,7 +427,7 @@ void evaluar_modelo(RedNeuronalMNIST& red, const vector<vector<double>>& imagene
     cout << "========================================\n";
 
     int predicciones_correctas = 0;
-    int total_muestras = min(1000, (int)imagenes_test.size()); // Evaluar máximo 1000 muestras
+    int total_muestras = min(10000, (int)imagenes_test.size()); // Evaluar
 
     for (int i = 0; i < total_muestras; ++i) {
         int prediccion = red.predecir_digito(imagenes_test[i]);
@@ -406,7 +442,7 @@ void evaluar_modelo(RedNeuronalMNIST& red, const vector<vector<double>>& imagene
     }
 
     double precision = (double)predicciones_correctas / total_muestras * 100.0;
-    cout << "\n📊 RESULTADOS DE EVALUACIÓN:\n";
+    cout << "\n RESULTADOS DE EVALUACIÓN:\n";
     cout << "   Muestras evaluadas: " << total_muestras << "\n";
     cout << "   Predicciones correctas: " << predicciones_correctas << "\n";
     cout << "   Precisión: " << precision << "%\n";
@@ -438,20 +474,21 @@ void generar_datos_prueba(vector<vector<double>>& imagenes, vector<int>& etiquet
 }
 
 int main() {
-    cout << " Red Neuronal de Clasificación MNIST con RMSprop \n";
-    cout << "================================================================\n";
+    cout << " Red Neuronal de Clasificación MNIST con Optimizador Adam \n";
 
     // Configuración de la red
     const int PIXELES_ENTRADA = 784;    // 28x28 píxeles
     const int NEURONAS_OCULTAS = 128;   // Capa intermedia
     const int DIGITOS_SALIDA = 10;      // Números 0-9
-    const double VELOCIDAD_APRENDIZAJE = 0.001;  // Velocidad más baja para RMSprop
-    const double BETA_RMSPROP = 0.9;    // Factor de decaimiento
+    const double VELOCIDAD_APRENDIZAJE = 0.001;  // Velocidad típica para Adam
+    const double BETA1_ADAM = 0.9;      // Factor de momento
+    const double BETA2_ADAM = 0.999;    // Factor de velocidad
 
-    // Crear la red neuronal con RMSprop
-    RedNeuronalMNIST red(PIXELES_ENTRADA, NEURONAS_OCULTAS, DIGITOS_SALIDA, VELOCIDAD_APRENDIZAJE, BETA_RMSPROP);
+    // Creando la red neuronal con Adam
+    RedNeuronalMNIST red(PIXELES_ENTRADA, NEURONAS_OCULTAS, DIGITOS_SALIDA,
+                        VELOCIDAD_APRENDIZAJE, BETA1_ADAM, BETA2_ADAM);
 
-    // Intentar leer datos de entrenamiento desde CSV
+    // leer datos de entrenamiento desde CSV
     vector<vector<double>> imagenes_entrenamiento;
     vector<int> etiquetas_entrenamiento;
 
@@ -463,15 +500,18 @@ int main() {
         generar_datos_prueba(imagenes_entrenamiento, etiquetas_entrenamiento);
     } else {
         // Usar solo una muestra para entrenamiento rápido
-        int muestras_entrenamiento = min(5000, (int)imagenes_entrenamiento.size());
+        int muestras_entrenamiento = min(10000, (int)imagenes_entrenamiento.size());
         imagenes_entrenamiento.resize(muestras_entrenamiento);
         etiquetas_entrenamiento.resize(muestras_entrenamiento);
 
         cout << " Usando " << muestras_entrenamiento << " muestras para entrenamiento\n";
     }
 
-    // Entrenar la red con RMSprop
+    // Entrenar la red con Adam
     red.entrenar(imagenes_entrenamiento, etiquetas_entrenamiento, csv_cargado ? 50 : 100);
+
+    // Mostrar estadísticas de Adam
+    red.mostrar_estadisticas_adam();
 
     // Intentar leer datos de prueba
     vector<vector<double>> imagenes_prueba;
@@ -497,10 +537,10 @@ int main() {
         vector<double> todas_probabilidades = red.obtener_probabilidades(imagenes_prueba[prueba]);
 
         cout << "\n Muestra " << prueba + 1 << ":\n";
-        cout << "   Dígito correcto: " << etiquetas_prueba[prueba] << "\n";
-        cout << "   Predicción: " << prediccion << "\n";
-        cout << "   Confianza: " << (int)(todas_probabilidades[prediccion] * 100) << "%\n";
-        cout << "   Probabilidades por dígito:\n      ";
+        cout << "    Dígito correcto: " << etiquetas_prueba[prueba] << "\n";
+        cout << "    Predicción: " << prediccion << "\n";
+        cout << "    Confianza: " << (int)(todas_probabilidades[prediccion] * 100) << "%\n";
+        cout << "    Probabilidades por dígito:\n      ";
 
         for (int digito = 0; digito < 10; ++digito) {
             cout << digito << ":" << (int)(todas_probabilidades[digito] * 100) << "% ";
@@ -509,14 +549,14 @@ int main() {
 
         // Indicar si la predicción fue correcta
         if (prediccion == etiquetas_prueba[prueba]) {
-            cout << "   Predicción CORRECTA!\n";
+            cout << "    Predicción CORRECTA!\n";
         } else {
-            cout << "   Predicción incorrecta\n";
+            cout << "    Predicción incorrecta\n";
         }
     }
 
     cout << "\n PROCESO COMPLETADO \n";
-    cout << "La red neuronal con RMSprop ha sido entrenada y evaluada exitosamente!\n";
+    cout << "La red neuronal con optimizador Adam ha sido entrenada y evaluada exitosamente!\n";
 
     return 0;
 }
