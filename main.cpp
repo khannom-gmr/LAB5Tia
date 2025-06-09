@@ -39,7 +39,7 @@ vector<double> softmax(const vector<double>& valores) {
     double suma_total = 0.0;
     double valor_maximo = *max_element(valores.begin(), valores.end());
 
-    // Calcular exponenciales
+    // exponenciales
     for (size_t i = 0; i < valores.size(); ++i) {
         probabilidades[i] = exp(valores[i] - valor_maximo);
         suma_total += probabilidades[i];
@@ -111,7 +111,7 @@ public:
         }
     }
 
-    // número (0-9) a [0,0,0,1,0,0,0,0,0,0]
+    // [0,0,0,1,0,0,0,0,0,0]
     vector<double> crear_objetivo(int digito_correcto) {
         vector<double> objetivo(num_digitos, 0.0);
         objetivo[digito_correcto] = 1.0;
@@ -176,13 +176,13 @@ public:
 
                 //  RETROPROPAGACIÓN
 
-                // Calcular errores de la capa de salida
+                // Calculando errores de la capa de salida
                 vector<double> errores_salida(num_digitos);
                 for (int i = 0; i < num_digitos; ++i) {
                     errores_salida[i] = probabilidades[i] - objetivo[i];
                 }
 
-                // Calcular errores de la capa oculta
+                // Calculando errores de la capa oculta
                 vector<double> errores_ocultos(num_neuronas_ocultas);
                 for (int neurona = 0; neurona < num_neuronas_ocultas; ++neurona) {
                     double suma_error = 0.0;
@@ -195,16 +195,14 @@ public:
                 //  pesos oculta salida
                 for (int digito = 0; digito < num_digitos; ++digito) {
                     for (int conexion = 0; conexion < num_neuronas_ocultas + 1; ++conexion) {
-                        pesos_oculta_a_salida[digito][conexion] -=
-                            velocidad_aprendizaje * errores_salida[digito] * activaciones_ocultas[conexion];
+                        pesos_oculta_a_salida[digito][conexion] -= velocidad_aprendizaje * errores_salida[digito] * activaciones_ocultas[conexion];
                     }
                 }
 
                 // de pesos entrada oculta
                 for (int neurona = 0; neurona < num_neuronas_ocultas; ++neurona) {
                     for (int conexion = 0; conexion < num_pixeles + 1; ++conexion) {
-                        pesos_entrada_a_oculta[neurona][conexion] -=
-                            velocidad_aprendizaje * errores_ocultos[neurona] * pixeles_norm[conexion];
+                        pesos_entrada_a_oculta[neurona][conexion] -= velocidad_aprendizaje * errores_ocultos[neurona] * pixeles_norm[conexion];
                     }
                 }
             }
@@ -308,7 +306,7 @@ bool leer_csv_mnist(const string& mnist_train, vector<vector<double>>& imagenes,
         }
 
         // Verificar que la fila tenga el tamaño correcto
-        if (fila_datos.size() == 785) { // 784 píxeles + 1 etiqueta
+        if (fila_datos.size() == 785) {
             // Primera columna es la etiqueta
             int etiqueta = (int)fila_datos[0];
             etiquetas.push_back(etiqueta);
@@ -324,7 +322,7 @@ bool leer_csv_mnist(const string& mnist_train, vector<vector<double>>& imagenes,
                 cout << "Procesadas " << contador << " imágenes...\n";
             }
         } else if (fila_datos.size() == 784) {
-            // Caso alternativo: solo píxeles (sin etiqueta)
+            // Caso alternativo: solo píxeles sin etiqueta
             vector<double> imagen(fila_datos.begin(), fila_datos.end());
             imagenes.push_back(imagen);
             etiquetas.push_back(0); // Etiqueta por defecto
@@ -337,7 +335,7 @@ bool leer_csv_mnist(const string& mnist_train, vector<vector<double>>& imagenes,
     return contador > 0;
 }
 
-// NUEVA FUNCIÓN: Evaluar modelo con datos de prueba
+// Evaluar modelo con datos de prueba
 void evaluar_modelo(RedNeuronalMNIST& red, const vector<vector<double>>& imagenes_test,
                    const vector<int>& etiquetas_test) {
     cout << "\n  EVALUACIÓN CON DATOS DE PRUEBA \n";
@@ -390,7 +388,7 @@ void generar_datos_prueba(vector<vector<double>>& imagenes, vector<int>& etiquet
     cout << " Se generaron " << imagenes.size() << " imágenes de prueba\n";
 }
 
-//  FUNCIÓN PRINCIPAL MODIFICADA
+
 int main() {
     cout << "  Red de Clasificación de Dígitos MNIST \n";
     cout << "================================================================\n";
@@ -402,7 +400,7 @@ int main() {
     const double VELOCIDAD_APRENDIZAJE = 0.1;
 
     // Crear la red neuronal
-    RedNeuronalMNIST mi_red(PIXELES_ENTRADA, NEURONAS_OCULTAS, DIGITOS_SALIDA, VELOCIDAD_APRENDIZAJE);
+    RedNeuronalMNIST red(PIXELES_ENTRADA, NEURONAS_OCULTAS, DIGITOS_SALIDA, VELOCIDAD_APRENDIZAJE);
 
     // Intentar leer datos de entrenamiento desde CSV
     vector<vector<double>> imagenes_entrenamiento;
@@ -412,10 +410,10 @@ int main() {
     bool csv_cargado = leer_csv_mnist("mnist_train.csv", imagenes_entrenamiento, etiquetas_entrenamiento);
 
     if (!csv_cargado) {
-        cout << "⚠  No se encontró mnist_train.csv, usando datos simulados...\n";
+        cout << "  No se encontró mnist_train.csv, usando datos simulados...\n";
         generar_datos_prueba(imagenes_entrenamiento, etiquetas_entrenamiento);
     } else {
-        // Opcional: Usar solo una muestra para entrenamiento rápido
+        // Usar solo una muestra para entrenamiento rápido
         int muestras_entrenamiento = min(5000, (int)imagenes_entrenamiento.size());
         imagenes_entrenamiento.resize(muestras_entrenamiento);
         etiquetas_entrenamiento.resize(muestras_entrenamiento);
@@ -424,7 +422,7 @@ int main() {
     }
 
     // Entrenar la red
-    mi_red.entrenar(imagenes_entrenamiento, etiquetas_entrenamiento, csv_cargado ? 50 : 100);
+    red.entrenar(imagenes_entrenamiento, etiquetas_entrenamiento, csv_cargado ? 50 : 100);
 
     // Intentar leer datos de prueba
     vector<vector<double>> imagenes_prueba;
@@ -434,7 +432,7 @@ int main() {
     bool test_csv_cargado = leer_csv_mnist("mnist_test.csv", imagenes_prueba, etiquetas_prueba);
 
     if (test_csv_cargado) {
-        evaluar_modelo(mi_red, imagenes_prueba, etiquetas_prueba);
+        evaluar_modelo(red, imagenes_prueba, etiquetas_prueba);
     } else {
         cout << "️  No se encontró mnist_test.csv, usando datos de entrenamiento para demostración...\n";
         imagenes_prueba = imagenes_entrenamiento;
@@ -446,13 +444,13 @@ int main() {
     cout << "================================\n";
 
     for (int prueba = 0; prueba < 5 && prueba < imagenes_prueba.size(); ++prueba) {
-        int prediccion = mi_red.predecir_digito(imagenes_prueba[prueba]);
-        vector<double> todas_probabilidades = mi_red.obtener_probabilidades(imagenes_prueba[prueba]);
+        int prediccion = red.predecir_digito(imagenes_prueba[prueba]);
+        vector<double> todas_probabilidades = red.obtener_probabilidades(imagenes_prueba[prueba]);
 
         cout << "\n Muestra " << prueba + 1 << ":\n";
-        cout << "   Dígito correcto: " << etiquetas_prueba[prueba] << "\n";
-        cout << "   Predicción: " << prediccion << "\n";
-        cout << "   Confianza: " << (int)(todas_probabilidades[prediccion] * 100) << "%\n";
+        cout << "   correcto digito: " << etiquetas_prueba[prueba] << "\n";
+        cout << "   predicción: " << prediccion << "\n";
+        cout << "   confianza: " << (int)(todas_probabilidades[prediccion] * 100) << "%\n";
         cout << "   Probabilidades por dígito:\n      ";
 
         for (int digito = 0; digito < 10; ++digito) {
